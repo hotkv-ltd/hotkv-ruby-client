@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
                %w[README.md SECURITY.md LICENSE NOTICE]
   spec.require_paths = ["lib"]
 
-  spec.add_development_dependency "bigdecimal", "~> 3.0"
+  spec.add_development_dependency "bigdecimal", "~> 4.1"
   spec.add_development_dependency "minitest", "~> 5.20"
   spec.add_development_dependency "rake", "~> 13.1"
 
