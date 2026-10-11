@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-unit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        ruby: ["3.0", "3.1", "3.2", "3.3"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Syntax check
+        run: find lib -name '*.rb' -print0 | xargs -0 -n1 ruby -wc
+      - name: Run unit tests (no server needed)
+        run: bundle exec rake test:unit
+      - name: Build gem
+        run: gem build hotkv.gemspec
+
+  # Integration tests need a live HotKV server, which this workflow does
+  # not provision. To run them locally or in a private runner that has a
+  # HotKV server (or Docker image) available:
+  #
+  #   HOTKV_TEST_URL=hotkv://127.0.0.1:6379 bundle exec rake test:integration
+  #
+  # Uncomment and adapt the job below once such a server/image exists.
+  #
+  # integration-test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: ruby/setup-ruby@v1
+  #       with:
+  #         ruby-version: "3.3"
+  #         bundler-cache: true
+  #     - name: Start HotKV server
+  #       run: docker run -d -p 6379:6379 hotkv/hotkv:latest
+  #     - name: Run integration tests
+  #       env:
+  #         HOTKV_TEST_URL: hotkv://127.0.0.1:6379
+  #       run: bundle exec rake test:integration

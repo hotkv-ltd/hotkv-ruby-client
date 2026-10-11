@@ -1,0 +1,77 @@
+name: Publish
+
+# Builds the gem and, on a version tag, pushes it to RubyGems.
+#
+#   git tag v1.0.0 && git push origin v1.0.0     publishes
+#   Actions > Publish > Run workflow             dry run by default: builds and
+#                                                verifies, never pushes
+#
+# Uses RubyGems Trusted Publishing: the "hotkv" gem on rubygems.org trusts this
+# repository and workflow, so no API key or repository secret is needed.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify only; do not push to RubyGems"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # RubyGems Trusted Publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # A tag push always publishes; a manual run publishes only when dry_run
+      # is switched off.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Read the gem version
+        id: version
+        run: echo "version=$(ruby -Ilib -e 'require "hotkv/version"; puts HotKV::VERSION')" >> "$GITHUB_OUTPUT"
+      - name: Check the tag matches lib/hotkv/version.rb
+        if: github.ref_type == 'tag'
+        run: |
+          if [ "$GITHUB_REF_NAME" != "v${{ steps.version.outputs.version }}" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match HotKV::VERSION ${{ steps.version.outputs.version }}" >&2
+            exit 1
+          fi
+      - name: Refuse a real publish that is not from a tag
+        if: env.DRY_RUN != 'true' && github.ref_type != 'tag'
+        run: |
+          echo "Publishing needs a version tag (v${{ steps.version.outputs.version }}); run this workflow as a dry run, or push the tag." >&2
+          exit 1
+      - name: Syntax check
+        run: find lib -name '*.rb' -print0 | xargs -0 -n1 ruby -wc
+      - name: Run unit tests (no server needed)
+        run: bundle exec rake test:unit
+      - name: Build gem
+        run: gem build hotkv.gemspec
+      - name: List the gem contents
+        run: gem spec "hotkv-${{ steps.version.outputs.version }}.gem" files | sed 's/^- //'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hotkv-${{ steps.version.outputs.version }}.gem
+          path: hotkv-${{ steps.version.outputs.version }}.gem
+      # Trusted Publishing: rubygems.org trusts this repository and workflow (set on the
+      # gem's page there), so no API key is stored.
+      - name: Configure RubyGems credentials
+        if: env.DRY_RUN != 'true'
+        uses: rubygems/configure-rubygems-credentials@v2.1.0
+      - name: Push to RubyGems
+        if: env.DRY_RUN != 'true'
+        run: gem push "hotkv-${{ steps.version.outputs.version }}.gem"
+      - name: Dry run summary
+        if: env.DRY_RUN == 'true'
+        run: echo "Dry run only. Built hotkv-${{ steps.version.outputs.version }}.gem and pushed nothing."

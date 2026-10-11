@@ -1,0 +1,14 @@
+/pkg/
+/tmp/
+*.gem
+.bundle/
+.byebug_history
+.yardoc/
+doc/
+/.rspec_status
+Gemfile.lock
+*.rbc
+.rvmrc
+.ruby-version.local
+coverage/
+*.log
